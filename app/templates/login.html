@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · 医疗网络与数据安全服务平台</title>
+  <style>
+    body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f6f8; display: flex; justify-content: center; padding-top: 80px; }
+    .card { background: #fff; border: 1px solid #e3e4e0; border-radius: 10px; padding: 32px; width: 380px; }
+    h1 { font-size: 17px; margin: 0 0 20px; }
+    label { display: block; font-size: 13px; margin: 12px 0 4px; }
+    input[type=text], input[type=password] { width: 100%; padding: 8px; border: 1px solid #d3d1c7; border-radius: 6px; box-sizing: border-box; }
+    .btn { margin-top: 18px; width: 100%; background: #185FA5; color: #fff; border: none; border-radius: 6px; padding: 10px; font-size: 14px; cursor: pointer; }
+    .error { color: #A32D2D; font-size: 13px; margin-top: 10px; }
+    .disclaimer { font-size: 12px; color: #5f5e5a; background: #f1efe8; border-radius: 6px; padding: 10px; margin-top: 16px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>医疗网络与数据安全服务平台</h1>
+    <form method="post">
+      <label>用户名</label>
+      <input type="text" name="username" required>
+      <label>密码</label>
+      <input type="password" name="password" required>
+      <div class="disclaimer">
+        本平台为科研院所提供的公益性技术服务。平台输出（分类分级结果、推演结论、整改建议）均为参考性建议，不构成等级保护测评结论，不替代法定测评。上传内容仅限数据字典与脱密后的拓扑描述，严禁上传原始医疗数据。
+      </div>
+      <label style="margin-top:10px"><input type="checkbox" name="disclaimer" value="1"> 我已阅读并同意上述免责声明</label>
+      <button class="btn" type="submit">登录</button>
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    </form>
+  </div>
+</body>
+</html>

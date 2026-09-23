@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2 style="margin:0 0 8px;font-size:16px">工作台</h2>
+  <p class="muted">三大功能 + 医疗专用沙盒。原始医疗数据不出院，仅上传数据字典与脱密拓扑。</p>
+</div>
+<div class="card">
+  <h3 style="margin:0 0 6px;font-size:14px">① 数据分类分级（一期首发）</h3>
+  <p class="muted">经沙盒上传数据字典（CSV：表名,字段名,注释），自动按 GB/T 39725 五级定级。</p>
+  <a class="btn" href="/sandbox/upload" style="text-decoration:none;display:inline-block">去上传</a>
+</div>
+<div class="card">
+  <h3 style="margin:0 0 6px;font-size:14px">② 攻防推演（种子迁移中）</h3>
+  <p class="muted">上传脱密拓扑后，在数字孪生环境中进行纯仿真推演，输出整改报告。沙盘引擎迁移接入中。</p>
+</div>
+<div class="card">
+  <h3 style="margin:0 0 6px;font-size:14px">③ 合规判断（二期）</h3>
+  <p class="muted">等保 2.0 + 医疗卫生机构网络安全管理办法 + 分类分级 三件套规则库，依赖一期数据资产清单。</p>
+</div>
+{% endblock %}

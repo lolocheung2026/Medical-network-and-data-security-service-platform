@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}医疗网络与数据安全服务平台{% endblock %}</title>
+  <style>
+    body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; background: #f5f6f8; color: #2c2c2a; }
+    nav { background: #185FA5; color: #fff; padding: 12px 24px; display: flex; gap: 20px; align-items: center; }
+    nav a { color: #fff; text-decoration: none; font-size: 14px; }
+    nav .brand { font-weight: 600; font-size: 15px; margin-right: 16px; }
+    main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border: 1px solid #e3e4e0; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+    .btn { background: #185FA5; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 14px; cursor: pointer; }
+    .muted { color: #888780; font-size: 13px; }
+    .error { color: #A32D2D; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="brand">医疗网络与数据安全服务平台</span>
+    <a href="/dashboard">工作台</a>
+    <a href="/sandbox/upload">沙盒上传</a>
+    <a href="/reports/list">报告中心</a>
+    <a href="/logout" style="margin-left:auto">退出</a>
+  </nav>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>
