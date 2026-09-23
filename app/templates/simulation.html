@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}攻防推演 · 医疗网络与数据安全服务平台{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 4px">攻防推演</h2>
+<p class="muted" style="margin-top:0">纯仿真推演，基于场景内置脱密拓扑，零接触真实网络。选择场景，一键推演攻击链并生成整改建议。</p>
+
+<div class="card">
+  <h3 style="margin:0 0 12px">推演场景（{{ scenarios | length }}）</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <tr style="text-align:left;border-bottom:1px solid #e3e4e0">
+      <th style="padding:6px 8px">场景</th><th style="padding:6px 8px">类别</th>
+      <th style="padding:6px 8px">难度</th><th style="padding:6px 8px">节点/攻击步</th>
+      <th style="padding:6px 8px"></th>
+    </tr>
+    {% for s in scenarios %}
+    <tr style="border-bottom:1px solid #f0f1ee">
+      <td style="padding:8px"><strong>{{ s.name }}</strong><br>
+        <span class="muted">{{ s.desc }}</span></td>
+      <td style="padding:8px">{{ s.category }}</td>
+      <td style="padding:8px">{{ s.difficulty }}</td>
+      <td style="padding:8px">{{ s.node_count }} / {{ s.attack_steps }}</td>
+      <td style="padding:8px"><button class="btn run-btn" data-sid="{{ s.id }}">推演</button></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card" id="report-card" style="display:none">
+  <h3 style="margin:0 0 4px" id="rp-title"></h3>
+  <p class="muted" id="rp-meta" style="margin-top:0"></p>
+  <div id="rp-summary"></div>
+  <h4 style="margin:16px 0 6px">攻击步骤结果</h4>
+  <div id="rp-steps"></div>
+  <h4 style="margin:16px 0 6px">整改建议</h4>
+  <div id="rp-remediation"></div>
+  <p class="muted" style="margin-top:14px" id="rp-disclaimer"></p>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 8px">历史推演</h3>
+  <ul id="run-history" style="padding-left:20px;font-size:14px">
+    <li class="muted">加载中…</li>
+  </ul>
+</div>
+
+<script>
+function fmtDefense(run) {
+  const parts = [];
+  if (run.completed && run.completed.length) parts.push('达成 ' + run.completed.length + ' 步');
+  if (run.blocked && run.blocked.length) parts.push('拦截 ' + run.blocked.length + ' 步');
+  if (run.stalled && run.stalled.length) parts.push('受阻 ' + run.stalled.length + ' 步');
+  return parts.join('，') || '—';
+}
+function renderReport(data) {
+  const r = data.report, s = r.summary;
+  document.getElementById('report-card').style.display = 'block';
+  document.getElementById('rp-title').textContent = r.scenario + ' · 推演报告';
+  document.getElementById('rp-meta').textContent =
+    '运行 #' + data.run_id + ' | ' + r.start_time + ' | ' + fmtDefense(data.summary);
+  document.getElementById('rp-summary').innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<tr><td>攻击步</td><td>' + s.total_steps + '</td><td>达成</td><td>' + s.completed + '</td>' +
+    '<td>被拦截</td><td>' + s.blocked + '</td></tr>' +
+    '<tr><td>节点攻陷</td><td>' + s.nodes_compromised + '/' + s.total_nodes + '</td>' +
+    '<td>防御生效</td><td>' + s.defenses_active + '/' + s.total_defenses + '</td>' +
+    '<td>防御被绕过</td><td>' + s.bypassed + '</td></tr></table>';
+  document.getElementById('rp-steps').innerHTML = r.attack_steps.map(function (st) {
+    const cls = st.state === 'completed' ? '#A32D2D' : (st.state === 'blocked' ? '#1e7d32' : '#888780');
+    const label = st.state === 'completed' ? '✓ 达成' : (st.state === 'blocked' ? '⊘ 拦截' : '· 未触发');
+    return '<div style="padding:4px 0;border-bottom:1px solid #f0f1ee;font-size:13px">' +
+      '<span style="color:' + cls + '">' + label + '</span> <strong>' + st.name + '</strong>' +
+      '</div>';
+  }).join('');
+  document.getElementById('rp-remediation').innerHTML = r.remediation.map(function (m) {
+    return '<div style="padding:6px 0;border-bottom:1px solid #f0f1ee;font-size:13px">' +
+      '<strong>' + m.item + '</strong> <span class="muted">[' + m.cost + ' · ' + m.dept + ']</span>' +
+      '<br><span class="muted">' + m.detail + '</span></div>';
+  }).join('');
+  document.getElementById('rp-disclaimer').textContent = r.disclaimer || '';
+}
+document.querySelectorAll('.run-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    const sid = btn.dataset.sid;
+    btn.disabled = true; btn.textContent = '推演中…';
+    fetch('/simulation/run/' + sid, {method: 'POST'})
+      .then(r => r.json())
+      .then(d => { if (d.ok) { renderReport(d); loadHistory(); } else { alert(d.error); } })
+      .catch(e => alert('推演失败: ' + e))
+      .finally(() => { btn.disabled = false; btn.textContent = '推演'; });
+  });
+});
+function loadHistory() {
+  fetch('/simulation/runs')
+    .then(r => r.json())
+    .then(list => {
+      const ul = document.getElementById('run-history');
+      ul.innerHTML = list.length ? list.map(r =>
+        '<li><a href="javascript:void(0)" class="hist-link" data-id="' + r.id + '">' +
+        r.scenario_name + '</a> <span class="muted">' + r.created_at + '</span></li>'
+      ).join('') : '<li class="muted">暂无记录</li>';
+      ul.querySelectorAll('.hist-link').forEach(a => a.addEventListener('click', () => {
+        fetch('/simulation/runs/' + a.dataset.id)
+          .then(r => r.json())
+          .then(d => { if (d.report) renderReport({run_id: d.id, summary: {
+            completed: d.report.summary.completed, blocked: d.report.summary.blocked,
+            stalled: d.report.summary.pending}}, report: d.report}); });
+      }));
+    });
+}
+loadHistory();
+</script>
+{% endblock %}

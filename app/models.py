@@ -44,3 +44,18 @@ class Upload(db.Model):
     status = db.Column(db.String(16), nullable=False, default=STATUS_DEIDENTIFIED)
     deidentify_report = db.Column(db.Text, nullable=True)  # JSON：脱密动作+风险标记
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class SimulationRun(db.Model):
+    """攻防推演记录：租户 × 场景 × 一次推演结果（v0.2）。"""
+
+    STATUS_OK = "ok"
+    STATUS_ERROR = "error"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False)
+    scenario_id = db.Column(db.String(64), nullable=False)
+    scenario_name = db.Column(db.String(128), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default=STATUS_OK)
+    result_json = db.Column(db.Text, nullable=True)  # 推演报告 JSON（generate_report 输出）
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
