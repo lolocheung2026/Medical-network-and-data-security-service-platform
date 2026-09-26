@@ -45,6 +45,8 @@ def create_app(config_object="config.Config"):
     with app.app_context():
         db.create_all()
         _seed_dev_account()
+        from .compliance.routes import seed_items
+        seed_items()
 
     return app
 

@@ -59,3 +59,44 @@ class SimulationRun(db.Model):
     status = db.Column(db.String(16), nullable=False, default=STATUS_OK)
     result_json = db.Column(db.Text, nullable=True)  # 推演报告 JSON（generate_report 输出）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ComplianceItem(db.Model):
+    """合规检查项规则库（v1.0 骨架）。
+
+    平台级共享条文：tenant_id=0 表示平台内置，所有租户复用同一套检查项；
+    规则内容由乐叔按官方文本审定后填充（见 ADR-0006）。
+    """
+
+    ANCHORS = {
+        "mlps": "等保 2.0（三级基线）",
+        "measures": "医疗卫生机构网络安全管理办法",
+        "gb39725": "GB/T 39725 健康医疗数据安全指南",
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, default=0, nullable=False)  # 0=平台内置共享
+    anchor = db.Column(db.String(16), nullable=False)             # mlps | measures | gb39725
+    article = db.Column(db.String(32), nullable=False)            # 条款号，如 8.1.4.1
+    title = db.Column(db.String(128), nullable=False)             # 条款标题/控制项名
+    provision = db.Column(db.Text, nullable=False)                # 条款原文/要点
+    checkpoint = db.Column(db.String(256), nullable=False)        # 可判定检查点
+    evidence_hint = db.Column(db.String(256), nullable=True)      # 证据要求提示
+    active = db.Column(db.Boolean, default=True)
+
+
+class ComplianceAssessment(db.Model):
+    """租户合规评估记录（v1.0 骨架）：租户 × 检查项 × 判定状态。"""
+
+    STATUS_COMPLIANT = "compliant"
+    STATUS_NON_COMPLIANT = "non_compliant"
+    STATUS_NOT_APPLICABLE = "not_applicable"
+    STATUS_PENDING = "pending"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey("compliance_item.id"), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default=STATUS_PENDING)
+    evidence = db.Column(db.Text, nullable=True)                  # 证据描述（客户自述）
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
