@@ -34,6 +34,7 @@
   <h4 style="margin:16px 0 6px">整改建议</h4>
   <div id="rp-remediation"></div>
   <p class="muted" style="margin-top:14px" id="rp-disclaimer"></p>
+  <p><a id="rp-export" href="#" class="btn" style="display:inline-block;text-decoration:none;margin-top:8px">导出 DOCX 报告</a></p>
 </div>
 
 <div class="card">
@@ -54,6 +55,7 @@ function fmtDefense(run) {
 function renderReport(data) {
   const r = data.report, s = r.summary;
   document.getElementById('report-card').style.display = 'block';
+  document.getElementById('rp-export').href = '/export/simulation/' + data.run_id;
   document.getElementById('rp-title').textContent = r.scenario + ' · 推演报告';
   document.getElementById('rp-meta').textContent =
     '运行 #' + data.run_id + ' | ' + r.start_time + ' | ' + fmtDefense(data.summary);
