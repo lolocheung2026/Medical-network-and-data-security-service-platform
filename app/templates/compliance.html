@@ -2,21 +2,22 @@
 {% block title %}合规判断 · 医疗网络与数据安全服务平台{% endblock %}
 {% block content %}
 <h2 style="margin:0 0 4px">网络与数据行为合规判断</h2>
-<p class="muted" style="margin-top:0">锚点三件套：等保 2.0（三级基线）·《医疗卫生机构网络安全管理办法》· GB/T 39725。评估结果为机构自述证据的参考性整理，不构成等保测评结论，不涉及商用密码应用评估。</p>
+<p class="muted" style="margin-top:0">法源 22 部（法律 5 · 行政法规 4 · 部门规章 4 · 规范性文件 7 · 地方性法规 2）。检查项为要点草案，正式条文待审定。评估结果为机构自述证据的参考性整理，不构成等保测评结论，不涉及商用密码应用评估。</p>
 
 <div class="card">
   <h3 style="margin:0 0 8px">符合率总览</h3>
   <p><a href="/compliance/report" id="rate-link" class="muted">点击加载汇总…</a></p>
-  <div id="rate-box" style="font-size:13px"></div>
+  <div id="rate-box" style="font-size:13px;max-height:220px;overflow:auto"></div>
 </div>
 
-{% for anchor, items in by_anchor.items() %}
+{% for cat, sources in grouped.items() %}
 <div class="card">
-  <h3 style="margin:0 0 4px">{{ anchors[anchor] }}（{{ items | length }} 项）</h3>
-  <p class="muted" style="margin-top:0;font-size:12px">条文内容为样例占位，正式规则库待审定后替换。</p>
+  <h3 style="margin:0 0 4px">{{ cat }}（{{ sources | length }} 部）</h3>
+  {% for src_name, items in sources.items() %}
+  <h4 style="margin:14px 0 6px;font-size:14px">{{ src_name }}（{{ items | length }} 项）</h4>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <tr style="text-align:left;border-bottom:1px solid #e3e4e0">
-      <th style="padding:6px 8px;width:70px">条款</th>
+      <th style="padding:6px 8px;width:80px">条款</th>
       <th style="padding:6px 8px">检查点</th>
       <th style="padding:6px 8px;width:80px">当前状态</th>
       <th style="padding:6px 8px;width:130px">操作</th>
@@ -46,6 +47,7 @@
     </tr>
     {% endfor %}
   </table>
+  {% endfor %}
 </div>
 {% endfor %}
 
@@ -58,7 +60,7 @@ fetch('/compliance/report')
     b.innerHTML = '<div style="margin:6px 0">符合 <b>' + d.compliant + '</b> · 不符合 <b style="color:#A32D2D">' + d.non_compliant +
       '</b> · 不适用 ' + d.not_applicable + ' · 待评估 ' + d.pending +
       ' · 符合率 <b>' + d.compliance_rate + '%</b></div>' +
-      Object.entries(d.by_anchor).map(([k, v]) =>
+      Object.entries(d.by_source).map(([k, v]) =>
         '<div style="padding:2px 0">' + k + '：' + v.符合 + ' 符合 / ' + v.不符合 + ' 不符合 / ' + v.total + ' 项</div>'
       ).join('');
   });
