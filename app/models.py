@@ -112,3 +112,21 @@ class ComplianceAssessment(db.Model):
     evidence = db.Column(db.Text, nullable=True)                  # 证据描述（客户自述）
     updated_at = db.Column(db.DateTime, default=datetime.utcnow,
                            onupdate=datetime.utcnow)
+
+
+class ClassificationCorrection(db.Model):
+    """分类分级人工校正记录（v0.3 迭代，2026-09-26）。
+
+    租户对字段定级的人工修正；分类引擎查询校正表优先于规则库命中，
+    实现"人工校正→规则回流"闭环。校正以 (table_name, field_name) 为键。
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenant.id"), nullable=False)
+    table_name = db.Column(db.String(128), nullable=False)
+    field_name = db.Column(db.String(128), nullable=False)
+    comment = db.Column(db.String(256), nullable=True)
+    original_level = db.Column(db.Integer, nullable=False)        # 规则引擎原定级
+    corrected_level = db.Column(db.Integer, nullable=False)       # 人工修正级别
+    reason = db.Column(db.String(256), nullable=True)             # 修正理由
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -44,11 +44,16 @@ def classify_field(field_name, comment=""):
     return (CATEGORY_DEFAULT, "未识别（默认内部）", None)
 
 
-def classify_data_dict_csv(text):
-    """输入数据字典 CSV（表名,字段名,注释 三列起步），输出逐字段定级结果。"""
+def classify_data_dict_csv(text, corrections=None):
+    """输入数据字典 CSV（表名,字段名,注释 三列起步），输出逐字段定级结果。
+
+    corrections: {(table_name, field_name): {"level": int, "reason": str}}，
+    人工校正优先于规则命中（v0.3 迭代：校正回流闭环）。
+    """
     import csv
     import io
 
+    corrections = corrections or {}
     reader = csv.reader(io.StringIO(text))
     rows = list(reader)
     if not rows:
@@ -61,6 +66,18 @@ def classify_data_dict_csv(text):
         table = row[0].strip() if len(row) > 0 else ""
         field = row[1].strip() if len(row) > 1 else ""
         comment = row[2].strip() if len(row) > 2 else ""
+
+        corr = corrections.get((table, field))
+        if corr:
+            results.append({
+                "table": table, "field": field, "comment": comment,
+                "level": corr["level"], "level_label": LEVELS[corr["level"]],
+                "category": "人工校正",
+                "hit_keyword": f"人工校正（原定级覆盖，理由：{corr.get('reason') or '未填写'}）",
+                "corrected": True,
+            })
+            continue
+
         level, category, kw = classify_field(f"{table}.{field}", comment)
         results.append({
             "table": table, "field": field, "comment": comment,
