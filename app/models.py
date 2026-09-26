@@ -61,22 +61,34 @@ class SimulationRun(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-class ComplianceItem(db.Model):
-    """合规检查项规则库（v1.0 骨架）。
+class RegulationSource(db.Model):
+    """合规判断法源库（v1.0 扩展，2026-09-26 乐叔定 22 部）。
 
-    平台级共享条文：tenant_id=0 表示平台内置，所有租户复用同一套检查项；
-    规则内容由乐叔按官方文本审定后填充（见 ADR-0006）。
+    平台级共享：tenant_id=0。效力层级：法律 / 行政法规 / 部门规章 /
+    规范性文件 / 地方性法规。
     """
 
-    ANCHORS = {
-        "mlps": "等保 2.0（三级基线）",
-        "measures": "医疗卫生机构网络安全管理办法",
-        "gb39725": "GB/T 39725 健康医疗数据安全指南",
-    }
+    CATEGORIES = ["法律", "行政法规", "部门规章", "规范性文件", "地方性法规"]
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, default=0, nullable=False)
+    code = db.Column(db.String(32), unique=True, nullable=False)    # 内部代码
+    name = db.Column(db.String(128), nullable=False)                # 全称
+    short_name = db.Column(db.String(64), nullable=True)            # 常用简称
+    category = db.Column(db.String(16), nullable=False)             # 效力层级
+    active = db.Column(db.Boolean, default=True)
+
+
+class ComplianceItem(db.Model):
+    """合规检查项规则库（v1.0 骨架，2026-09-26 扩展为 22 部法源）。
+
+    平台级共享条文：tenant_id=0；anchor 存法源代码（RegulationSource.code）。
+    检查项内容由乐叔按官方文本审定（见 ADR-0006/0007）。
+    """
 
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, default=0, nullable=False)  # 0=平台内置共享
-    anchor = db.Column(db.String(16), nullable=False)             # mlps | measures | gb39725
+    anchor = db.Column(db.String(32), nullable=False)             # 法源代码
     article = db.Column(db.String(32), nullable=False)            # 条款号，如 8.1.4.1
     title = db.Column(db.String(128), nullable=False)             # 条款标题/控制项名
     provision = db.Column(db.Text, nullable=False)                # 条款原文/要点

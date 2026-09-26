@@ -1,16 +1,15 @@
-"""合规判断模块 v1.0 骨架（2026-09-26，ADR-0006）。
+"""合规判断模块 v1.0（2026-09-26，ADR-0006/0007）。
 
-锚点三件套：等保 2.0（三级基线）/《医疗卫生机构网络安全管理办法》/ GB/T 39725。
+法源：22 部法律法规（乐叔 2026-09-26 定，见 seed_data.REGULATIONS）。
 边界：不碰密评（报告仅引导咨询密评机构）。
-本骨架：检查项列表（按锚点分组）+ 租户评估提交 + 符合率汇总。
-规则内容：SEED_ITEMS 为样例条文（仅结构验证用，标注"样例待审定"），
-正式条文库由乐叔按官方文本审定后替换（组织分工：乐叔出领域规则）。
+规则内容：检查项为要点草案，正式条文由乐叔按官方文本审定后替换。
 """
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from ..auth.routes import current_user, login_required
 from ..extensions import db
-from ..models import ComplianceAssessment, ComplianceItem
+from ..models import ComplianceAssessment, ComplianceItem, RegulationSource
+from .seed_data import REGULATIONS, SEED_ITEMS
 
 bp = Blueprint("compliance", __name__)
 
@@ -21,48 +20,32 @@ STATUS_LABELS = {
     ComplianceAssessment.STATUS_PENDING: "待评估",
 }
 
-# 样例条文（仅结构验证；正式规则由乐叔审定后替换，见 ADR-0006）
-SEED_ITEMS = [
-    {
-        "anchor": "mlps", "article": "8.1.4.1", "title": "边界防护",
-        "provision": "应保证跨越边界的访问和数据流通过边界设备提供的受控接口进行通信。",
-        "checkpoint": "互联网边界是否部署受控接口（防火墙/安全网关），是否存在绕过边界的直连通道？",
-        "evidence_hint": "网络拓扑图、防火墙策略截图",
-    },
-    {
-        "anchor": "mlps", "article": "8.1.3.2", "title": "访问控制",
-        "provision": "应删除或停用多余、过期的账户，避免共享账户的存在。",
-        "checkpoint": "是否定期清理多余/过期账户，是否存在多人共用账户？",
-        "evidence_hint": "账户清单、清理记录",
-    },
-    {
-        "anchor": "measures", "article": "第八条", "title": "等级保护落实",
-        "provision": "医疗卫生机构应当落实网络安全等级保护制度，对重要网络和信息系统开展定级备案。",
-        "checkpoint": "核心业务系统（HIS 等）是否完成定级备案？",
-        "evidence_hint": "定级备案证明（样例，以官方发布文本为准）",
-    },
-    {
-        "anchor": "measures", "article": "第九条", "title": "数据分类分级",
-        "provision": "医疗卫生机构应当按照健康医疗数据分类分级相关标准，对数据实行分类分级管理。",
-        "checkpoint": "是否建立数据资产清单并完成分类分级？",
-        "evidence_hint": "分类分级结果（可与本平台分类分级模块联动）（样例，以官方发布文本为准）",
-    },
-    {
-        "anchor": "gb39725", "article": "6.1", "title": "数据分类分级方法",
-        "provision": "依据数据重要程度与安全影响，对健康医疗数据进行分类分级。",
-        "checkpoint": "数据分类分级是否覆盖全部数据资产，定级是否可溯源？",
-        "evidence_hint": "定级清单与规则溯源（样例，以标准原文为准）",
-    },
-]
-
 
 def seed_items():
-    """平台内置样例条文（幂等：已存在则跳过）。"""
-    if ComplianceItem.query.first():
-        return
-    for it in SEED_ITEMS:
-        db.session.add(ComplianceItem(tenant_id=0, **it))
+    """幂等种子：22 部法源 + 检查项草案；旧三锚点数据自动清理。"""
+    from ..models import ComplianceItem as CI
+    for code, name, short, cat in REGULATIONS:
+        if not RegulationSource.query.filter_by(code=code).first():
+            db.session.add(RegulationSource(tenant_id=0, code=code, name=name,
+                                            short_name=short, category=cat))
+    db.session.flush()
+
+    # 清理旧版三锚点样例（2026-09-26 上午的骨架数据）及其评估记录
+    for old in ("mlps", "measures", "gb39725"):
+        for it in CI.query.filter_by(anchor=old).all():
+            ComplianceAssessment.query.filter_by(item_id=it.id).delete()
+            db.session.delete(it)
+
+    if CI.query.first() is None:
+        for anchor, article, title, provision, checkpoint, hint in SEED_ITEMS:
+            db.session.add(CI(tenant_id=0, anchor=anchor, article=article,
+                              title=title, provision=provision,
+                              checkpoint=checkpoint, evidence_hint=hint))
     db.session.commit()
+
+
+def _sources():
+    return {s.code: s for s in RegulationSource.query.filter_by(active=True).all()}
 
 
 def _status_of(tenant_id):
@@ -75,22 +58,27 @@ def _status_of(tenant_id):
 def index():
     items = ComplianceItem.query.filter_by(active=True).order_by(
         ComplianceItem.anchor, ComplianceItem.article).all()
-    by_anchor = {}
+    sources = _sources()
+    # 按效力层级分组 → 组内按法源 → 检查项
+    grouped = {}
     for it in items:
-        by_anchor.setdefault(it.anchor, []).append(it)
+        src = sources.get(it.anchor)
+        if not src:
+            continue
+        cat = grouped.setdefault(src.category, {})
+        lst = cat.setdefault(src.name, [])
+        lst.append(it)
     assessments = _status_of(session["tenant_id"])
     return render_template(
         "compliance.html", user=current_user(),
-        anchors=ComplianceItem.ANCHORS, by_anchor=by_anchor,
-        assessments=assessments, status_labels=STATUS_LABELS)
+        grouped=grouped, assessments=assessments, status_labels=STATUS_LABELS)
 
 
 @bp.route("/assess/<int:item_id>", methods=["POST"])
 @login_required
 def assess(item_id):
     """提交/更新某检查项的评估状态（本租户）。"""
-    item = ComplianceItem.query.filter_by(
-        id=item_id, active=True).first_or_404()
+    ComplianceItem.query.filter_by(id=item_id, active=True).first_or_404()
     status = request.form.get("status", "")
     if status not in STATUS_LABELS:
         return jsonify({"ok": False, "msg": "非法状态值"}), 400
@@ -110,11 +98,12 @@ def assess(item_id):
 @bp.route("/report")
 @login_required
 def report():
-    """符合率汇总（按锚点）。"""
+    """符合率汇总（按法源）。"""
     items = ComplianceItem.query.filter_by(active=True).all()
     assessments = _status_of(session["tenant_id"])
+    sources = _sources()
     total, compliant, non_compliant, na, pending = 0, 0, 0, 0, 0
-    by_anchor = {}
+    by_src = {}
     for it in items:
         st = (assessments.get(it.id).status
               if it.id in assessments else ComplianceAssessment.STATUS_PENDING)
@@ -122,8 +111,11 @@ def report():
                "不符合" if st == ComplianceAssessment.STATUS_NON_COMPLIANT else
                "不适用" if st == ComplianceAssessment.STATUS_NOT_APPLICABLE else
                "待评估")
-        a = by_anchor.setdefault(it.anchor, {"total": 0, "符合": 0, "不符合": 0,
-                                             "不适用": 0, "待评估": 0})
+        src = sources.get(it.anchor)
+        if not src:
+            continue
+        a = by_src.setdefault(src.name, {"total": 0, "符合": 0, "不符合": 0,
+                                         "不适用": 0, "待评估": 0})
         a["total"] += 1
         a[key] += 1
         total += 1
@@ -137,7 +129,7 @@ def report():
         "total": total, "compliant": compliant, "non_compliant": non_compliant,
         "not_applicable": na, "pending": pending,
         "compliance_rate": round(rate, 1),
-        "by_anchor": {ComplianceItem.ANCHORS[k]: v for k, v in by_anchor.items()},
+        "by_source": by_src,
         "disclaimer": "评估结果为机构自述证据的参考性整理，不构成等保测评结论；"
                       "商用密码应用评估请咨询密评机构。",
     })
@@ -148,7 +140,7 @@ def report():
 def status():
     return jsonify({
         "module": "合规判断",
-        "state": "v1.0 骨架（规则内容待审定）",
-        "anchors": list(ComplianceItem.ANCHORS.values()),
+        "state": "v1.0（22 部法源，检查项草案待审定）",
+        "sources": [s.name for s in _sources().values()],
         "note": "不碰密评；报告仅引导咨询密评机构",
     })
