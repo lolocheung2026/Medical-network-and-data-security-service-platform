@@ -112,6 +112,28 @@ def run(upload_id):
                     "distribution": dist, "items": results})
 
 
+@bp.route("/corrections/stats")
+@login_required
+def corrections_stats():
+    """校正数据观察接口（L2 观察期决策，2026-09-26）：本租户校正记录清单。"""
+    recs = (ClassificationCorrection.query
+            .filter_by(tenant_id=session["tenant_id"])
+            .order_by(ClassificationCorrection.id.desc()).all())
+    items = [{
+        "table": c.table_name, "field": c.field_name,
+        "original_level": c.original_level,
+        "corrected_level": c.corrected_level,
+        "reason": c.reason,
+        "created_at": c.created_at.strftime("%Y-%m-%d %H:%M"),
+    } for c in recs]
+    freq = {}
+    for c in recs:
+        key = f"{c.table_name}.{c.field_name}"
+        freq[key] = freq.get(key, 0) + 1
+    return jsonify({"total": len(recs), "items": items,
+                    "freq_by_field": freq})
+
+
 @bp.route("/levels")
 @login_required
 def levels():

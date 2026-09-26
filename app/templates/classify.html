@@ -87,4 +87,22 @@
   <p><a href="/export/classify/{{ upload_id }}" class="btn" style="display:inline-block;text-decoration:none">导出 DOCX 结果表</a></p>
 </div>
 {% endif %}
+
+<div class="card">
+  <h3 style="margin:0 0 8px">人工校正记录（观察期）</h3>
+  <p class="muted" style="margin-top:0;font-size:12px">校正数据用于观察规则缺口；观察期 1-2 周后按高频校正词审慎扩充规则库。</p>
+  <ul id="corr-list" style="padding-left:20px;font-size:13px"><li class="muted">加载中…</li></ul>
+</div>
+
+<script>
+fetch('/classify/corrections/stats')
+  .then(r => r.json())
+  .then(d => {
+    const ul = document.getElementById('corr-list');
+    ul.innerHTML = d.items.length ? d.items.map(c =>
+      '<li>' + c.table + '.' + c.field + '：L' + c.original_level + ' → L' + c.corrected_level +
+      ' <span class="muted">（' + (c.reason || '未填理由') + ' · ' + c.created_at + '）</span></li>'
+    ).join('') : '<li class="muted">暂无校正记录</li>';
+  });
+</script>
 {% endblock %}
