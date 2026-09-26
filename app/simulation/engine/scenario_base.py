@@ -267,6 +267,24 @@ class ScenarioBase:
     def _add_edge(self, src, dst, label=""):
         self.edges.append({"from": src, "to": dst, "label": label})
 
+    def apply_user_topology(self, topo):
+        """v0.2.1：用用户上传的脱密拓扑替换场景内置拓扑。
+
+        topo 为 topology_spec.validate_topology 产出的规范化结构
+        （nodes 含自动布局坐标）。仅在推演开始前调用；攻击步/防御/整改
+        仍引用场景内置节点 id——节点 id 不匹配时相关步骤按不满足前置处理。
+        """
+        self.nodes = []
+        self.edges = []
+        self.node_states = {}
+        for n in topo["nodes"]:
+            self._add_node(n["id"], n["label"], n["type"], n.get("x", 0),
+                           n.get("y", 0), n.get("desc", ""))
+        for e in topo["edges"]:
+            self._add_edge(e["from"], e["to"], e.get("label", ""))
+        self.user_topology_applied = True
+
+
     def _add_attack_step(self, sid, name, desc, preconditions, effects,
                          detection="中", technique="", mitre=""):
         step = {

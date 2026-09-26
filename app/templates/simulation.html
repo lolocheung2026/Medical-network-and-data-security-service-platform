@@ -6,6 +6,17 @@
 
 <div class="card">
   <h3 style="margin:0 0 12px">推演场景（{{ scenarios | length }}）</h3>
+  {% if topologies %}
+  <p style="font-size:13px;margin:0 0 10px">用户拓扑（脱密入库，替换场景内置拓扑）：
+    <select id="topo-select" style="font-size:13px;padding:3px">
+      <option value="">使用场景内置拓扑</option>
+      {% for t in topologies %}
+      <option value="{{ t.id }}">{{ t.original_filename }}</option>
+      {% endfor %}
+    </select>
+    <span class="muted" style="font-size:12px">攻击步引用的节点 id 与拓扑不一致时将按不满足前置处理</span>
+  </p>
+  {% endif %}
   <table style="width:100%;border-collapse:collapse;font-size:14px">
     <tr style="text-align:left;border-bottom:1px solid #e3e4e0">
       <th style="padding:6px 8px">场景</th><th style="padding:6px 8px">类别</th>
@@ -83,8 +94,14 @@ function renderReport(data) {
 document.querySelectorAll('.run-btn').forEach(function (btn) {
   btn.addEventListener('click', function () {
     const sid = btn.dataset.sid;
+    const sel = document.getElementById('topo-select');
+    const body = sel && sel.value ? JSON.stringify({topo_id: parseInt(sel.value, 10)}) : '{}';
     btn.disabled = true; btn.textContent = '推演中…';
-    fetch('/simulation/run/' + sid, {method: 'POST'})
+    fetch('/simulation/run/' + sid, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: body
+    })
       .then(r => r.json())
       .then(d => { if (d.ok) { renderReport(d); loadHistory(); } else { alert(d.error); } })
       .catch(e => alert('推演失败: ' + e))

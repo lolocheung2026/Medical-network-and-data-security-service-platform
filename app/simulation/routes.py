@@ -1,11 +1,11 @@
-"""攻防推演模块 v0.2（2026-09-23）。
+"""攻防推演模块 v0.2.1（2026-09-23 + 2026-09-26 用户拓扑支持）。
 
 沙盘引擎库模式接入：18 场景全量迁入 app/simulation/，
 ScenarioManager 显式注册（不依赖沙盘 config.py）。
 
-本迭代边界（ADR-0002）：
-- 拓扑来源 = 场景内置拓扑；用户脱密拓扑替换场景拓扑留 v0.2.1。
-- 一键推演 = reset → start → 顺序执行全部攻击步 → generate_report → 落库。
+v0.2.1（ADR-0002 未决项落地，2026-09-26）：
+- 用户上传脱密拓扑可替换场景内置拓扑：POST /run/<sid> 传 topo_id。
+- 场景实例进程级共享 → 用户拓扑应用前后做备份/恢复（finally 保证不污染）。
 - 纯仿真推演，零接触真实网络（产品红线）。
 """
 import json
@@ -15,9 +15,10 @@ from flask import Blueprint, jsonify, render_template, request, session
 
 from ..auth.routes import login_required
 from ..extensions import db
-from ..models import SimulationRun
+from ..models import SimulationRun, Upload
 from . import scenarios as scenario_pkg
 from .engine.scenario_manager import ScenarioManager
+from .topology_spec import validate_topology
 
 bp = Blueprint("simulation", __name__)
 
@@ -34,16 +35,39 @@ def _manager():
     return _mgr
 
 
-def _run_scenario(sid):
+def _load_user_topology(topo_id):
+    """读取本租户已脱密入库的拓扑并校验，返回 (ok, topo, err)。"""
+    rec = Upload.query.filter_by(
+        id=topo_id, tenant_id=session["tenant_id"],
+        kind=Upload.KIND_TOPOLOGY, status=Upload.STATUS_DEIDENTIFIED,
+    ).first()
+    if not rec:
+        return False, None, "拓扑不存在或未脱密入库"
+    with open(rec.stored_path, encoding="utf-8") as fp:
+        ok, topo, errors = validate_topology(fp.read())
+    if not ok:
+        return False, None, "；".join(errors[:3])
+    return True, topo, None
+
+
+def _run_scenario(sid, topo=None):
     """一键推演，返回 (run_summary, report) 或 (error_msg, None)。"""
     mgr = _manager()
     inst = mgr.get_instance(sid)
     if not inst:
         return "场景不存在", None
-    inst.reset(keep_behavior=True)  # 保留用户画像配置，仅清推演现场
-    inst.start()
-    run = inst._run_all_steps()
-    report = inst.generate_report()
+    saved = None
+    if topo:
+        saved = (inst.nodes, inst.edges, inst.node_states)
+        inst.apply_user_topology(topo)
+    try:
+        inst.reset(keep_behavior=True)  # 保留用户画像配置，仅清推演现场
+        inst.start()
+        run = inst._run_all_steps()
+        report = inst.generate_report()
+    finally:
+        if saved:  # 进程级共享实例：推演后恢复内置拓扑，防跨租户污染
+            inst.nodes, inst.edges, inst.node_states = saved
     return run, report
 
 
@@ -51,7 +75,13 @@ def _run_scenario(sid):
 @login_required
 def index():
     scenarios = _manager().list_scenarios()
-    return render_template("simulation.html", scenarios=scenarios)
+    topologies = (Upload.query
+                  .filter_by(tenant_id=session["tenant_id"],
+                             kind=Upload.KIND_TOPOLOGY,
+                             status=Upload.STATUS_DEIDENTIFIED)
+                  .order_by(Upload.id.desc()).all())
+    return render_template("simulation.html", scenarios=scenarios,
+                           topologies=topologies)
 
 
 @bp.route("/scenarios")
@@ -63,8 +93,18 @@ def scenarios_api():
 @bp.route("/run/<sid>", methods=["POST"])
 @login_required
 def run(sid):
-    """执行一次推演并落库，返回完整报告 JSON。"""
-    run, report = _run_scenario(sid)
+    """执行一次推演并落库，返回完整报告 JSON。
+
+    可选 JSON body：{"topo_id": <已脱密拓扑的 upload id>}
+    """
+    topo = None
+    topo_id = request.json.get("topo_id") if request.is_json else None
+    if topo_id:
+        ok, topo, err = _load_user_topology(int(topo_id))
+        if not ok:
+            return jsonify({"ok": False, "error": f"拓扑校验失败：{err}"}), 400
+
+    run, report = _run_scenario(sid, topo)
     if report is None:
         return jsonify({"ok": False, "error": run}), 404
 
