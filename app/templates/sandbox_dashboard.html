@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>健康医疗数据安全沙盘</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="dash-header">
+    <div class="dash-nav">
+      <h1>健康医疗数据安全沙盘</h1>
+      <a href="/simulation/" class="nav-link">返回平台</a>
+    </div>
+    <p>Healthcare Data Security Sandbox — 网络安全攻防推演平台</p>
+    <div class="dash-stats">
+      <div class="dash-stat"><span class="num">{{ scenarios|length }}</span> 推演场景</div>
+      <div class="dash-stat"><span class="num">4</span> 架构层级</div>
+      <div class="dash-stat"><span class="num">12</span> 安全模块</div>
+      <div class="dash-stat"><span class="num">0</span> 外网依赖</div>
+    </div>
+    <div class="workflow-bar">
+      <span class="wf-title">六步推演工作流</span>
+      <select id="wfTarget" class="mode-select">
+        <optgroup label="默认场景（不导入拓扑）">
+          {% for s in scenarios %}
+          <option value="scenario:{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </optgroup>
+      </select>
+      <!-- 2026-09-06 乐叔要求：去除链接，只作静态展示 -->
+      <span class="btn btn-primary" id="btnWorkflow" style="pointer-events:none;opacity:0.85;display:inline-block;">运行流程：导入拓扑到最终报告</span>
+    </div>
+  </div>
+
+  <div class="scenario-grid">
+    {% for s in scenarios %}
+    <div class="scenario-card" onclick="location.href='/scenario/{{ s.id }}'">
+      <span class="cat-badge cat-{{ s.category }}">{{ s.category }}</span>
+      <h3>{{ s.name }}</h3>
+      <div class="desc">{{ s.desc }}</div>
+      <div class="meta-row">
+        <span class="diff diff-{{ s.difficulty }}">{{ s.difficulty }}</span>
+        <span class="counts">
+          <span>{{ s.node_count }}节点</span>
+          <span>{{ s.attack_steps }}攻击</span>
+          <span>{{ s.defenses }}防御</span>
+          <span>{{ s.remediation_count }}整改</span>
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+<script>
+async function loadTopologies() {
+  var res = await fetch('/api/topologies');
+  var topos = await res.json();
+  var sel = document.getElementById('wfTarget');
+  var optgroup = document.createElement('optgroup');
+  optgroup.label = '导入拓扑图（步骤1）';
+  topos.forEach(function(t) {
+    // 2026-09-06：只列业务拓扑，整改产物（remediated）不进下拉
+    if (t.id.indexOf('remediated') >= 0 || t.group === '场景整改产物') return;
+    var o = document.createElement('option');
+    o.value = 'topology:' + t.id;
+    o.textContent = '[' + (t.group || '拓扑') + '] ' + t.name + '（' + t.node_count + '节点）';
+    optgroup.appendChild(o);
+  });
+  sel.appendChild(optgroup);
+}
+
+async function runWorkflow() {
+  // 跳转到场景页，以动画方式执行六步推演工作流（非静态弹窗）
+  var target = document.getElementById('wfTarget').value;
+  if (target.startsWith('topology:')) {
+    var tid = target.slice(9);
+    // 先导入拓扑（幂等），确保场景页可打开，否则未导入时场景页 404
+    try {
+      await fetch('/api/topology/' + tid + '/import', { method: 'POST' });
+    } catch (e) {}
+    location.href = '/scenario/topo_' + tid + '?workflow=1&topology=' + encodeURIComponent(tid);
+  } else {
+    var sid = target.slice(9);
+    location.href = '/scenario/' + sid + '?workflow=1';
+  }
+}
+
+loadTopologies();
+</script>
+</body>
+</html>

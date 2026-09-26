@@ -74,14 +74,9 @@ def _run_scenario(sid, topo=None):
 @bp.route("/")
 @login_required
 def index():
+    """攻防推演入口：沙盘原生工作台（2026-09-26 乐叔要求 100% 对齐原沙盘）。"""
     scenarios = _manager().list_scenarios()
-    topologies = (Upload.query
-                  .filter_by(tenant_id=session["tenant_id"],
-                             kind=Upload.KIND_TOPOLOGY,
-                             status=Upload.STATUS_DEIDENTIFIED)
-                  .order_by(Upload.id.desc()).all())
-    return render_template("simulation.html", scenarios=scenarios,
-                           topologies=topologies)
+    return render_template("sandbox_dashboard.html", scenarios=scenarios)
 
 
 @bp.route("/scenarios")

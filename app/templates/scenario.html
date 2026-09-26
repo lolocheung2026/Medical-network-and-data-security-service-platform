@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ meta.name }} - 健康医疗数据安全沙盘</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="scenario-page">
+    <div class="top-bar">
+      <div class="back-btn" onclick="location.href='/simulation/'">← 返回</div>
+      <div class="title-area">
+        <h2>{{ meta.name }} <span class="cat-badge cat-{{ meta.category }}">{{ meta.category }}</span></h2>
+      </div>
+      <span class="session-id" id="sessionId"></span>
+      <!-- 主推演入口（2026-09-06 乐叔优化：合并为单一主按钮） -->
+      <button class="btn btn-primary btn-lg" id="btnRemediate" onclick="showRemediateSim()" title="两轮闭环推演：轮1 现状（防护全开）→ 增量整改方案勾选 → 轮2 整改后验证 → 最终整改报告">启动网络安全攻防推演</button>
+      <button class="btn btn-warn" id="btnReset" onclick="resetScenario()" title="重置本轮推演状态">重置</button>
+      <span class="top-sep"></span>
+      <button class="btn btn-success" id="btnReport" onclick="showReport()" title="当前推演的技术报告">推演报告</button>
+      <span class="top-sep"></span>
+      <!-- 分析工具组 -->
+      <button class="btn" id="btnGraph" onclick="showAttackGraph()">攻击图</button>
+      <button class="btn" id="btnSim" onclick="showBehaviorSim()" title="攻击者行为模拟：画像+轮数+防御态势，蒙特卡洛统计成功率与最可能突破点">行为模拟</button>
+      <button class="btn" id="btnAnon" onclick="toggleAnonymize()" title="报告/拓扑脱敏，防真实资产信息外泄">脱敏:关</button>
+      <div class="prob-toggle" id="probToggle" onclick="toggleProbMode()" title="开启后防御有预设绕过率，推演更接近真实攻防">
+        <span class="toggle" id="probSwitch"></span>
+        <span class="prob-label">概率模式</span>
+        <span class="prob-hint" id="probHint"></span>
+      </div>
+    </div>
+
+    <div class="stage-bar" id="stageBar" style="display:none;">
+      <div class="stage-steps" id="stageSteps">
+        <div class="stage-step" data-step="1"><span class="stage-num">1</span>现状推演</div>
+        <div class="stage-arrow">›</div>
+        <div class="stage-step" data-step="2"><span class="stage-num">2</span>整改勾选</div>
+        <div class="stage-arrow">›</div>
+        <div class="stage-step" data-step="3"><span class="stage-num">3</span>整改落地</div>
+        <div class="stage-arrow">›</div>
+        <div class="stage-step" data-step="4"><span class="stage-num">4</span>验证推演</div>
+        <div class="stage-arrow">›</div>
+        <div class="stage-step" data-step="5"><span class="stage-num">5</span>整改报告</div>
+      </div>
+      <span id="stageText" class="stage-text"></span>
+      <button class="mini-btn" id="btnStageStop" onclick="stopRemediateSim()" style="display:none;">停止</button>
+    </div>
+
+    <div class="main-content">
+      <div class="topo-area">
+        <canvas id="topoCanvas"></canvas>
+        <div class="topo-status">
+          <span class="status-dot idle" id="statusDot"></span>
+          <span id="statusText">未启动</span>
+        </div>
+        <div class="topo-legend">
+          <!-- 2026-09-08 瘦身：短名显示，长说明移 title 悬停，防图例占比失衡 -->
+          <div class="legend-item" title="攻击源节点，推演发起方"><div class="legend-dot" style="background:#f85149"></div>攻击者</div>
+          <div class="legend-item" title="互联网/专线/政务外网等外部网络域"><div class="legend-dot" style="background:#39d2c0"></div>网络</div>
+          <div class="legend-item" title="交换机/防火墙/网闸/无线等硬件设备"><div class="legend-dot" style="background:#4f8ef5"></div>设备</div>
+          <div class="legend-item" title="服务器/数据库/终端/云等业务系统"><div class="legend-dot" style="background:#3fb950"></div>系统</div>
+          <div class="legend-item" title="当前攻击目标"><div class="legend-dot" style="background:#d29922"></div>攻击目标</div>
+          <div class="legend-item" title="已被攻陷的节点"><div class="legend-dot" style="background:#f85149;opacity:.5"></div>已攻陷</div>
+          <div class="legend-item" title="数据已被窃取"><div class="legend-dot" style="background:#bc8cff"></div>数据泄露</div>
+          <div class="legend-item" title="数据已被加密（勒索）"><div class="legend-dot" style="background:#791f1f"></div>已加密</div>
+          <div class="legend-item" title="防御已生效（白色点亮）"><div class="legend-dot" style="background:#e6edf3"></div>已防御</div>
+          <div class="legend-item" title="整改措施设备节点"><div class="legend-dot" style="background:#ff7bce;box-shadow:0 0 0 2px rgba(255,123,206,0.4)"></div>整改措施</div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="side-tabs">
+          <div class="side-tab active" data-tab="attacks" onclick="switchSideTab('attacks')">攻击步骤 <span class="count" id="attackCount">0/0</span></div>
+          <div class="side-tab" data-tab="defenses" onclick="switchSideTab('defenses')">防御对策 <span class="count" id="defenseCount">0/0</span></div>
+          <div class="side-tab" data-tab="remediations" onclick="switchSideTab('remediations')">整改措施 <span class="count" id="remediationCount">0</span></div>
+          <div class="side-tab" data-tab="assets" onclick="switchSideTab('assets')">资产清单</div>
+        </div>
+        <div class="side-panel active" id="panel-attacks">
+          <div class="section-body" id="attackList" style="flex:1;min-height:0;max-height:none;"></div>
+        </div>
+        <div class="side-panel" id="panel-defenses">
+          <div style="display:flex;justify-content:flex-end;padding:4px 0;">
+            <button class="mini-btn" id="btnAllDef" onclick="toggleAllDefenses()" title="一键开启/关闭所有防护措施">全开</button>
+          </div>
+          <div class="section-body" id="defenseList" style="flex:1;min-height:0;max-height:none;"></div>
+        </div>
+        <div class="side-panel" id="panel-remediations">
+          <div class="section-body" id="remediationList" style="flex:1;min-height:0;max-height:none;"></div>
+        </div>
+        <div class="side-panel" id="panel-assets">
+          <div class="section-body" id="assetList" style="flex:1;min-height:0;max-height:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-panels">
+      <div class="bottom-tabs">
+        <div class="side-tab active" data-btab="events" onclick="switchBottomTab('events')">事件日志</div>
+        <div class="side-tab" data-btab="timeline" onclick="switchBottomTab('timeline')">检测-响应时间线</div>
+        <div class="side-tab" data-btab="attck" onclick="switchBottomTab('attck')">ATT&amp;CK 覆盖</div>
+      </div>
+      <div class="side-panel active" id="bpanel-events">
+        <div class="log-body" id="logBody">
+          <div class="log-entry"><span class="log-time">--:--:--</span><span class="log-type system">系统</span><span class="log-msg">等待启动推演场景...</span></div>
+        </div>
+      </div>
+      <div class="side-panel" id="bpanel-timeline">
+        <div class="timeline-body" id="timelineBody">
+          <div class="log-entry"><span class="log-msg">推演开始后展示 MTTD/MTTR 检测响应时间线</span></div>
+        </div>
+      </div>
+      <div class="side-panel" id="bpanel-attck">
+        <div class="timeline-body" id="attckBody">
+          <div class="log-entry"><span class="log-msg">点击「刷新」加载本场景 ATT&amp;CK 覆盖度</span></div>
+          <button class="mini-btn" onclick="loadAttckPanel()" style="margin:8px;">刷新覆盖度</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="report-overlay" id="reportOverlay">
+    <div class="report-modal" id="reportModal">
+      <span class="report-close" onclick="document.getElementById('reportOverlay').classList.remove('show')">×</span>
+      <div id="reportContent"></div>
+    </div>
+  </div>
+
+  <div class="report-overlay" id="graphOverlay">
+    <div class="report-modal" id="graphModal">
+      <span class="report-close" onclick="document.getElementById('graphOverlay').classList.remove('show')">×</span>
+      <div id="graphContent"></div>
+    </div>
+  </div>
+
+  <div class="report-overlay" id="simOverlay">
+    <div class="report-modal" id="simModal">
+      <span class="report-close" onclick="document.getElementById('simOverlay').classList.remove('show')">×</span>
+      <div id="simContent"></div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js?v=20260923c"></script>
+  <script>
+    const SCENARIO_ID = "{{ sid }}";
+    initApp(SCENARIO_ID);
+  </script>
+</body>
+</html>
